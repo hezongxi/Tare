@@ -1,6 +1,6 @@
-appId: com.aibrowser.hermes
-productName: AI Browser
-copyright: Copyright 2024 AI Browser Team
+appId: com.tare.browser
+productName: Tare
+copyright: Copyright 2025 Tare Team
 
 directories:
   buildResources: resources
@@ -43,8 +43,8 @@ nsis:
   perMachine: false
   allowToChangeInstallationDirectory: true
   deleteAppDataOnUninstall: false
-  shortcutName: AI Browser
-  uninstallDisplayName: AI Browser
+  shortcutName: Tare
+  uninstallDisplayName: Tare
   createDesktopShortcut: always
   createStartMenuShortcut: true
 
@@ -67,4 +67,4 @@ linux:
 
 publish:
   provider: generic
-  url: https://github.com/your-repo/ai-browser/releases
+  url: https://github.com/hezongxi/Tare/releases
