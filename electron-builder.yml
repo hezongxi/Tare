@@ -1,0 +1,70 @@
+appId: com.aibrowser.hermes
+productName: AI Browser
+copyright: Copyright 2024 AI Browser Team
+
+directories:
+  buildResources: resources
+  output: dist
+
+files:
+  - out/**/*
+  - node_modules/**/*
+  - '!node_modules/**/{CHANGELOG.md,README.md,README,readme.md,readme}'
+  - '!node_modules/**/{test,tests,testing,__tests__}'
+  - '!node_modules/.cache'
+  - '!node_modules/.bin'
+  - '!**/*.map'
+  - '!**/*.ts'
+  - '!src/**'
+  - '!electron/**'
+  - '!preload/**'
+  - '!test/**'
+  - '!.github/**'
+
+extraResources:
+  - from: node_modules/sql.js/dist/sql-wasm.wasm
+    to: sql-wasm.wasm
+
+asar: true
+asarUnpack:
+  - '**/*.node'
+  - '**/*.dll'
+
+win:
+  icon: resources/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: '${productName}-${version}-Setup.${ext}'
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  shortcutName: AI Browser
+  uninstallDisplayName: AI Browser
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+
+mac:
+  icon: resources/icon.icns
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  category: public.app-category.productivity
+
+linux:
+  icon: resources/icon.png
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  category: Network
+
+publish:
+  provider: generic
+  url: https://github.com/your-repo/ai-browser/releases
