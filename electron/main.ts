@@ -40,6 +40,11 @@ function registerShortcuts(): void {
     mainWindow?.webContents.send('shortcut:toggleAI')
   })
 
+  // F12: 打开当前页面/内部页开发者工具
+  globalShortcut.register('F12', () => {
+    tabManager?.openDevTools()
+  })
+
   // F5 / Ctrl+R: 刷新当前页
   globalShortcut.register('F5', () => {
     const id = tabManager?.getActiveTabId()
@@ -61,9 +66,9 @@ function registerShortcuts(): void {
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 800,
+    width: 1572,
+    height: 995,
+    minWidth: 1120,
     minHeight: 600,
     frame: false,
     autoHideMenuBar: true,

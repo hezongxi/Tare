@@ -174,7 +174,7 @@ export function BookmarksPage(): React.ReactElement {
                   <Heart className="w-4 h-4 text-gray-300 group-hover:text-orange-400 transition-colors shrink-0" />
                   <button
                     onClick={() => handleOpenUrl(bm.url)}
-                    className="flex-1 text-left min-w-0"
+                    className="flex-1 text-center min-w-0"
                   >
                     <p className="text-sm text-gray-800 truncate group-hover:text-gray-900">{bm.title}</p>
                     <p className="text-xs text-gray-400 truncate mt-0.5">{bm.url}</p>

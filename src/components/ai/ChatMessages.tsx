@@ -19,71 +19,72 @@ export function ChatMessages({ messages, isLoading, streamingContent }: Props): 
   }, [messages, streamingContent])
 
   const aiAvatar = (
-    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-      <Bot className="w-4 h-4 text-white" />
+    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 to-rose-500 shadow-[0_8px_18px_rgba(244,63,94,0.25)]">
+      <Bot className="h-4 w-4 text-white" />
     </div>
   )
 
   return (
-    <div ref={containerRef} className="flex-1 overflow-y-auto px-4 py-5 space-y-5">
+    <div ref={containerRef} className="flex-1 overflow-y-auto px-6 py-5">
       {messages.length === 0 && !isLoading && (
-        <div className="flex flex-col items-center justify-center h-full text-center py-16">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center mb-4 shadow-lg shadow-orange-200/40">
-            <Bot className="w-8 h-8 text-white" />
+        <div className="flex h-full min-h-[320px] flex-col items-center justify-center text-center">
+          <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-500 to-rose-500 shadow-[0_16px_34px_rgba(244,63,94,0.25)]">
+            <Bot className="h-8 w-8 text-white" />
           </div>
-          <p className="text-base font-semibold text-gray-700 mb-1">你好！我是 AI 助手</p>
-          <p className="text-sm text-gray-400 font-light">可以帮你理解网页内容、回答问题、翻译和总结</p>
+          <p className="text-lg font-semibold text-slate-900">你好！我是 AI 助手</p>
+          <p className="mt-3 max-w-[320px] text-sm leading-6 text-slate-500">
+            可以帮你理解网页内容、回答问题、翻译和总结
+          </p>
         </div>
       )}
 
-      {messages.map((msg, i) => (
-        <div key={i} className={`flex gap-2.5 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-          {msg.role === 'assistant' && aiAvatar}
-          <div className={`
-            max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed
-            ${msg.role === 'user'
-              ? 'bg-gradient-to-r from-orange-500 to-rose-500 text-white shadow-sm'
-              : 'bg-gray-50 text-gray-800 border border-gray-100 shadow-sm'}
-          `}>
-            {msg.role === 'assistant' ? (
-              <div className="prose prose-sm max-w-none [&_p]:my-1 [&_ul]:my-1 [&_ol]:my-1 [&_code]:bg-gray-200 [&_code]:px-1 [&_code]:rounded [&_pre]:bg-gray-200 [&_pre]:p-2 [&_pre]:rounded-lg [&_pre]:text-xs">
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
+      <div className="space-y-5">
+        {messages.map((msg, index) => (
+          <div key={index} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+            {msg.role === 'assistant' && aiAvatar}
+            <div className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${
+              msg.role === 'user'
+                ? 'bg-blue-500 text-white'
+                : 'border border-slate-200 bg-white text-slate-800'
+            }`}>
+              {msg.role === 'assistant' ? (
+                <div className="prose prose-sm max-w-none [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_ol]:my-1 [&_p]:my-1 [&_pre]:rounded-lg [&_pre]:bg-slate-100 [&_pre]:p-2 [&_pre]:text-xs [&_ul]:my-1">
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                </div>
+              ) : (
+                <p>{msg.content}</p>
+              )}
+            </div>
+            {msg.role === 'user' && (
+              <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100">
+                <User className="h-4 w-4 text-slate-500" />
               </div>
-            ) : (
-              <p>{msg.content}</p>
             )}
           </div>
-          {msg.role === 'user' && (
-            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center shrink-0 mt-0.5">
-              <User className="w-4 h-4 text-gray-600" />
-            </div>
-          )}
-        </div>
-      ))}
+        ))}
 
-      {/* 流式输出 */}
-      {isLoading && streamingContent && (
-        <div className="flex gap-2.5 justify-start">
-          {aiAvatar}
-          <div className="max-w-[85%] rounded-2xl px-4 py-3 text-sm bg-gray-50 text-gray-800 border border-gray-100 shadow-sm leading-relaxed">
-            <div className="prose prose-sm max-w-none [&_p]:my-1">
-              <ReactMarkdown>{streamingContent}</ReactMarkdown>
+        {isLoading && streamingContent && (
+          <div className="flex justify-start gap-3">
+            {aiAvatar}
+            <div className="max-w-[82%] rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-800 shadow-sm">
+              <div className="prose prose-sm max-w-none [&_p]:my-1">
+                <ReactMarkdown>{streamingContent}</ReactMarkdown>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* 三点跳动加载动画 */}
-      {isLoading && !streamingContent && (
-        <div className="flex gap-2.5 justify-start">
-          {aiAvatar}
-          <div className="bg-gray-50 rounded-2xl px-5 py-4 flex items-center gap-1.5 border border-gray-100 shadow-sm">
-            <div className="w-2 h-2 rounded-full bg-orange-400 bounce-dot-1" />
-            <div className="w-2 h-2 rounded-full bg-orange-400 bounce-dot-2" />
-            <div className="w-2 h-2 rounded-full bg-orange-400 bounce-dot-3" />
+        {isLoading && !streamingContent && (
+          <div className="flex justify-start gap-3">
+            {aiAvatar}
+            <div className="flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
+              <div className="bounce-dot-1 h-2 w-2 rounded-full bg-orange-400" />
+              <div className="bounce-dot-2 h-2 w-2 rounded-full bg-orange-400" />
+              <div className="bounce-dot-3 h-2 w-2 rounded-full bg-orange-400" />
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }

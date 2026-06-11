@@ -208,7 +208,7 @@ export function DropdownMenu({ isOpen, onClose, onNewTab, onOpenHistory, onOpenS
             `}
           >
             <Icon className="w-4 h-4 text-gray-400 shrink-0" />
-            <span className="flex-1 text-left">{item.label}</span>
+            <span className="flex-1 text-center">{item.label}</span>
             {item.shortcut && (
               <span className="text-[10px] text-gray-400 font-mono">{item.shortcut}</span>
             )}

@@ -1,4 +1,5 @@
 import { BrowserView, BrowserWindow } from 'electron'
+import type { WebContents } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import { addHistoryVisit } from './db/repositories'
 
@@ -22,9 +23,13 @@ export class TabManager {
   private sidebarWidth = 0  // AI 侧边栏宽度
 
   // 布局常量
-  private readonly TAB_BAR_HEIGHT = 36
-  private readonly NAV_BAR_HEIGHT = 44
-  private readonly LEFT_SIDEBAR_WIDTH = 56
+  private readonly TAB_BAR_HEIGHT = 52
+  private readonly NAV_BAR_HEIGHT = 56
+  private readonly LEFT_SIDEBAR_WIDTH = 0
+  private readonly OUTER_GUTTER = 14
+  private readonly MAIN_TOP_GAP = 1
+  private readonly RIGHT_GUTTER = 14
+  private readonly BOTTOM_GUTTER = 8
 
   constructor(mainWindow: BrowserWindow) {
     this.mainWindow = mainWindow
@@ -309,11 +314,24 @@ export class TabManager {
    * 打开当前页面的开发者工具
    */
   openDevTools(): void {
-    if (!this.activeTabId) return
-    const tab = this.tabs.get(this.activeTabId)
-    if (tab && !tab.data.isNewTab) {
-      tab.view.webContents.openDevTools()
+    if (!this.activeTabId) {
+      this.openOrFocusDevTools(this.mainWindow.webContents)
+      return
     }
+    const tab = this.tabs.get(this.activeTabId)
+    if (tab && !tab.data.isNewTab && !tab.data.isInternalPage) {
+      this.openOrFocusDevTools(tab.view.webContents)
+      return
+    }
+    this.openOrFocusDevTools(this.mainWindow.webContents)
+  }
+
+  private openOrFocusDevTools(webContents: WebContents): void {
+    if (webContents.isDevToolsOpened()) {
+      webContents.devToolsWebContents?.focus()
+      return
+    }
+    webContents.openDevTools({ mode: 'detach' })
   }
 
   /**
@@ -518,13 +536,14 @@ export class TabManager {
     }
 
     const [winWidth, winHeight] = this.mainWindow.getSize()
-    const topOffset = this.TAB_BAR_HEIGHT + this.NAV_BAR_HEIGHT
+    const topOffset = this.TAB_BAR_HEIGHT + this.NAV_BAR_HEIGHT + this.MAIN_TOP_GAP
+    const leftOffset = this.OUTER_GUTTER + this.LEFT_SIDEBAR_WIDTH
 
     tab.view.setBounds({
-      x: this.LEFT_SIDEBAR_WIDTH,
+      x: leftOffset,
       y: topOffset,
-      width: winWidth - this.LEFT_SIDEBAR_WIDTH - this.sidebarWidth,
-      height: winHeight - topOffset
+      width: winWidth - leftOffset - this.RIGHT_GUTTER - this.sidebarWidth,
+      height: winHeight - topOffset - this.BOTTOM_GUTTER
     })
   }
 
