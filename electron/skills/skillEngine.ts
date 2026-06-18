@@ -149,6 +149,9 @@ export async function executeSkill(
 
   mainWindow.webContents.send('skill:executing', { skillId, skillName: skill.name })
 
+  // 准备活跃标签用于外部导航（如果是新标签页，需要先显示 BrowserView）
+  tabManager.prepareActiveTabForExternalNavigation()
+
   const results: string[] = []
 
   for (const step of steps) {

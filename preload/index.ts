@@ -63,6 +63,11 @@ contextBridge.exposeInMainWorld('browserAPI', {
     const listener = () => callback()
     ipcRenderer.on('browser:historyUpdated', listener)
     return () => ipcRenderer.removeListener('browser:historyUpdated', listener)
+  },
+  onTextSelected: (callback: (payload: { text: string; url: string; title: string }) => void) => {
+    const listener = (_event: any, payload: { text: string; url: string; title: string }) => callback(payload)
+    ipcRenderer.on('browser:textSelected', listener)
+    return () => ipcRenderer.removeListener('browser:textSelected', listener)
   }
 })
 
@@ -72,7 +77,7 @@ contextBridge.exposeInMainWorld('aiAPI', {
     ipcRenderer.invoke('ai:sendMessage', message, context),
   stopGeneration: () => ipcRenderer.invoke('ai:stopGeneration'),
   onPageContentRequest: () => ipcRenderer.invoke('ai:getPageContent'),
-  runAgent: (goal: string) => ipcRenderer.invoke('ai:runAgent', goal),
+  runAgent: (goal: string, history?: {role: string; content: string}[]) => ipcRenderer.invoke('ai:runAgent', goal, history),
   onToken: (callback: (token: string) => void) => {
     const listener = (_event: any, token: string) => callback(token)
     ipcRenderer.on('ai:token', listener)

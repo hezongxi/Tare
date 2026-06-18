@@ -1,6 +1,12 @@
 import { Database } from 'sql.js'
 import { getDatabase } from './connection'
 import { saveDatabase } from './connection'
+import {
+  getSkills as _getSkills,
+  addSkill as _addSkill,
+  updateSkill as _updateSkill,
+  deleteSkill as _deleteSkill
+} from '../skills/skillStore'
 
 // ===== 历史记录 =====
 export function addHistoryVisit(url: string, title: string): void {
@@ -154,61 +160,11 @@ export function setPreference(key: string, value: string): void {
   saveDatabase()
 }
 
-// ===== 技能 =====
-export function getSkills(): any[] {
-  const db = getDatabase()
-  const result = db.exec(
-    `SELECT id, name, description, category, triggers, steps, parameters, 
-            auto_learned, enabled, success_count, fail_count, created_at, updated_at 
-     FROM skills ORDER BY created_at DESC`
-  )
-  return formatResult(result)
-}
-
-export function addSkill(skill: any): void {
-  const db = getDatabase()
-  const now = new Date().toISOString()
-  db.run(
-    `INSERT INTO skills (id, name, description, category, triggers, steps, parameters, auto_learned, enabled, success_count, fail_count, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      skill.id, skill.name, skill.description || '', skill.category || 'general',
-      JSON.stringify(skill.triggers || []), JSON.stringify(skill.steps || []),
-      JSON.stringify(skill.parameters || []), skill.autoLearned ? 1 : 0,
-      skill.enabled !== false ? 1 : 0, 0, 0, now, now
-    ]
-  )
-  saveDatabase()
-}
-
-export function updateSkill(id: string, updates: any): void {
-  const db = getDatabase()
-  const fields: string[] = []
-  const values: any[] = []
-
-  if (updates.name !== undefined) { fields.push('name = ?'); values.push(updates.name) }
-  if (updates.description !== undefined) { fields.push('description = ?'); values.push(updates.description) }
-  if (updates.triggers !== undefined) { fields.push('triggers = ?'); values.push(JSON.stringify(updates.triggers)) }
-  if (updates.steps !== undefined) { fields.push('steps = ?'); values.push(JSON.stringify(updates.steps)) }
-  if (updates.parameters !== undefined) { fields.push('parameters = ?'); values.push(JSON.stringify(updates.parameters)) }
-  if (updates.enabled !== undefined) { fields.push('enabled = ?'); values.push(updates.enabled ? 1 : 0) }
-  if (updates.successCount !== undefined) { fields.push('success_count = ?'); values.push(updates.successCount) }
-  if (updates.failCount !== undefined) { fields.push('fail_count = ?'); values.push(updates.failCount) }
-
-  if (fields.length > 0) {
-    fields.push('updated_at = ?')
-    values.push(new Date().toISOString())
-    values.push(id)
-    db.run(`UPDATE skills SET ${fields.join(', ')} WHERE id = ?`, values)
-    saveDatabase()
-  }
-}
-
-export function deleteSkill(id: string): void {
-  const db = getDatabase()
-  db.run(`DELETE FROM skills WHERE id = ?`, [id])
-  saveDatabase()
-}
+// ===== 技能（委托给文件系统存储）=====
+export function getSkills(): any[] { return _getSkills() }
+export function addSkill(skill: any): void { _addSkill(skill) }
+export function updateSkill(id: string, updates: any): void { _updateSkill(id, updates) }
+export function deleteSkill(id: string): void { _deleteSkill(id) }
 
 // ===== 记忆/知识 =====
 export function getKnowledge(category?: string): any[] {

@@ -1,6 +1,6 @@
 import { ipcMain, BrowserWindow } from 'electron'
 import { sendChatMessage, stopGeneration } from '../ai/chatService'
-import { runAgent } from '../ai/agentService'
+import { runAgent, stopAgent } from '../ai/agentService'
 import { getTabManager } from './browserHandlers'
 import { executeSkill } from '../skills/skillEngine'
 
@@ -12,10 +12,11 @@ export function initAIIPC(mainWindow: BrowserWindow): void {
 
   ipcMain.handle('ai:stopGeneration', () => {
     stopGeneration()
+    stopAgent()
   })
 
   // Agent 任务执行
-  ipcMain.handle('ai:runAgent', async (_e, goal: string) => {
+  ipcMain.handle('ai:runAgent', async (_e, goal: string, history?: any[]) => {
     const tabManager = getTabManager()
     if (!tabManager) {
       mainWindow.webContents.send('agent:complete', {
@@ -25,7 +26,7 @@ export function initAIIPC(mainWindow: BrowserWindow): void {
       })
       return
     }
-    await runAgent(goal, tabManager, mainWindow)
+    await runAgent(goal, tabManager, mainWindow, history)
   })
 
   // 技能执行

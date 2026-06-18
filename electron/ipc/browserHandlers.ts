@@ -11,6 +11,7 @@ export function initBrowserIPC(manager: TabManager): void {
   })
 
   ipcMain.handle('browser:closeTab', (_e, tabId: string) => {
+    console.log('[BrowserIPC] closeTab requested:', tabId)
     tabManager!.closeTab(tabId)
   })
 

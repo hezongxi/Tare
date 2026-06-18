@@ -6,6 +6,36 @@ import { getTabManager } from '../ipc/browserHandlers'
 let openaiClient: OpenAI | null = null
 let abortController: AbortController | null = null
 
+type ChatHistoryMessage = {
+  role?: unknown
+  content?: unknown
+}
+
+const MAX_PAGE_CONTENT_CHARS = 12000
+const MAX_HISTORY_MESSAGES = 16
+const MAX_HISTORY_MESSAGE_CHARS = 2000
+
+function truncateText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text
+  return `${text.slice(0, maxChars)}\n\n[内容已截断，仅保留前 ${maxChars} 个字符]`
+}
+
+function normalizeHistory(history?: ChatHistoryMessage[]): OpenAI.Chat.ChatCompletionMessageParam[] {
+  if (!Array.isArray(history)) return []
+
+  return history
+    .slice(-MAX_HISTORY_MESSAGES)
+    .flatMap((item): OpenAI.Chat.ChatCompletionMessageParam[] => {
+      if (item.role !== 'user' && item.role !== 'assistant') return []
+      if (typeof item.content !== 'string' || !item.content.trim()) return []
+
+      return [{
+        role: item.role,
+        content: truncateText(item.content.trim(), MAX_HISTORY_MESSAGE_CHARS)
+      }]
+    })
+}
+
 /**
  * 获取或创建 OpenAI 客户端
  */
@@ -32,12 +62,20 @@ function getClient(): OpenAI {
  */
 export async function sendChatMessage(
   message: string,
-  context: { pageContent?: string; history?: any[] },
+  context: { pageContent?: string; history?: ChatHistoryMessage[] },
   mainWindow: BrowserWindow
 ): Promise<void> {
-  const client = getClient()
-  const prefs = getPreferences()
-  const model = prefs.model || 'gpt-4o'
+  let client: OpenAI
+  let model = 'gpt-4o'
+
+  try {
+    client = getClient()
+    const prefs = getPreferences()
+    model = prefs.model || 'gpt-4o'
+  } catch (err: any) {
+    mainWindow.webContents.send('ai:error', err.message || 'AI 配置不可用')
+    return
+  }
 
   abortController = new AbortController()
 
@@ -55,15 +93,20 @@ export async function sendChatMessage(
   }
 
   // 构建系统提示
-  let systemPrompt = `你是一个智能浏览器助手。请用中文回答用户的问题。回答要简洁、准确、有帮助。`
+  let systemPrompt = `你是一个智能浏览器助手。请用中文回答用户的问题。回答要简洁、准确、有帮助。
+
+上下文规则:
+- 优先结合当前会话历史理解用户意图，不要把短回复、代词或省略句当成孤立的新问题。
+- 如果上一轮你向用户询问需求、选项或确认信息，用户的简短回复通常是在回答上一轮问题；请继续原任务。
+- 只有当用户明确要求解释词义、翻译或查询百科时，才把单个词当成独立查询。`
 
   // 注入页面上下文
   if (pageContent) {
     try {
       const pageData = JSON.parse(pageContent)
-      systemPrompt += `\n\n当前页面信息:\n- 标题: ${pageData.title || '未知'}\n- URL: ${pageData.url || '未知'}\n- 描述: ${pageData.meta || '无'}\n\n页面内容:\n${pageData.text || '无法提取'}`
+      systemPrompt += `\n\n当前页面信息:\n- 标题: ${pageData.title || '未知'}\n- URL: ${pageData.url || '未知'}\n- 描述: ${pageData.meta || '无'}\n\n页面内容:\n${truncateText(pageData.text || '无法提取', MAX_PAGE_CONTENT_CHARS)}`
     } catch {
-      systemPrompt += `\n\n当前页面内容:\n${pageContent}`
+      systemPrompt += `\n\n当前页面内容:\n${truncateText(pageContent, MAX_PAGE_CONTENT_CHARS)}`
     }
   }
 
@@ -80,8 +123,10 @@ export async function sendChatMessage(
     // 记忆检索失败不影响正常对话
   }
 
+  const historyMessages = normalizeHistory(context.history)
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
+    ...historyMessages,
     { role: 'user', content: message }
   ]
 

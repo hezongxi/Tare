@@ -21,15 +21,17 @@ export class TabManager {
   private tabOrder: string[] = []
   private activeTabId: string | null = null
   private sidebarWidth = 0  // AI 侧边栏宽度
+  private lastSelectedTextByTab: Map<string, string> = new Map()
 
   // 布局常量
   private readonly TAB_BAR_HEIGHT = 52
   private readonly NAV_BAR_HEIGHT = 56
   private readonly LEFT_SIDEBAR_WIDTH = 0
-  private readonly OUTER_GUTTER = 14
-  private readonly MAIN_TOP_GAP = 1
-  private readonly RIGHT_GUTTER = 14
-  private readonly BOTTOM_GUTTER = 8
+  private readonly OUTER_GUTTER = 0
+  private readonly MAIN_TOP_GAP = 0
+  private readonly RIGHT_GUTTER = 0
+  private readonly BOTTOM_GUTTER = 0
+  private readonly SIDEBAR_OVERLAP = 0
 
   constructor(mainWindow: BrowserWindow) {
     this.mainWindow = mainWindow
@@ -115,8 +117,12 @@ export class TabManager {
    * 关闭标签页
    */
   closeTab(tabId: string): void {
+    console.log('[TabManager] closeTab:', tabId, 'total tabs:', this.tabs.size)
     const tab = this.tabs.get(tabId)
-    if (!tab) return
+    if (!tab) {
+      console.warn('[TabManager] Tab not found:', tabId)
+      return
+    }
 
     // 销毁 BrowserView
     this.mainWindow.removeBrowserView(tab.view)
@@ -280,6 +286,37 @@ export class TabManager {
   }
 
   /**
+   * 获取当前活跃标签的数据（供 Agent 判断是否为内部页面）
+   */
+  getActiveTabData(): { isNewTab: boolean; isInternalPage: boolean; url: string } | null {
+    if (!this.activeTabId) return null
+    const tab = this.tabs.get(this.activeTabId)
+    if (!tab) return null
+    return {
+      isNewTab: tab.data.isNewTab,
+      isInternalPage: tab.data.isInternalPage || false,
+      url: tab.data.url || ''
+    }
+  }
+
+  /**
+   * 准备活跃标签用于外部导航（如 Skill 执行）
+   * 将标签标记为非新标签页并显示 BrowserView
+   */
+  prepareActiveTabForExternalNavigation(): void {
+    if (!this.activeTabId) return
+    const tab = this.tabs.get(this.activeTabId)
+    if (!tab) return
+
+    if (tab.data.isNewTab || tab.data.isInternalPage) {
+      tab.data.isNewTab = false
+      tab.data.isInternalPage = false
+      this.sendToRenderer('browser:tabUpdated', this.activeTabId, { isNewTab: false, isInternalPage: false })
+      this.updateViewBounds(this.activeTabId)
+    }
+  }
+
+  /**
    * 设置侧边栏宽度（AI 侧边栏打开时调用）
    */
   setSidebarWidth(width: number): void {
@@ -438,6 +475,35 @@ export class TabManager {
   private setupViewListeners(tabId: string, view: BrowserView): void {
     const wc = view.webContents
 
+    wc.on('console-message', (_event, _level, message) => {
+      const marker = '__TARE_SELECTED_TEXT__'
+      if (!message.startsWith(marker)) return
+      if (tabId !== this.activeTabId) return
+
+      try {
+        const payload = JSON.parse(message.slice(marker.length))
+        const text = String(payload.text || '').trim()
+        if (!text || text === this.lastSelectedTextByTab.get(tabId)) return
+
+        this.lastSelectedTextByTab.set(tabId, text)
+        this.sendToRenderer('browser:textSelected', {
+          text,
+          url: String(payload.url || ''),
+          title: String(payload.title || '')
+        })
+      } catch {
+        // Ignore malformed console payloads from arbitrary pages.
+      }
+    })
+
+    wc.on('dom-ready', () => {
+      this.installSelectionBridge(tabId, view)
+    })
+
+    wc.on('did-finish-load', () => {
+      this.installSelectionBridge(tabId, view)
+    })
+
     wc.on('did-navigate', (_e, url) => {
       this.updateTabData(tabId, { url, isNewTab: false })
     })
@@ -517,6 +583,50 @@ export class TabManager {
     })
   }
 
+  private installSelectionBridge(tabId: string, view: BrowserView): void {
+    const tab = this.tabs.get(tabId)
+    if (!tab || tab.data.isNewTab || tab.data.isInternalPage) return
+
+    const bridgeScript = `
+      (() => {
+        if (window.__tareSelectionBridgeInstalled) return;
+        window.__tareSelectionBridgeInstalled = true;
+
+        let lastText = '';
+        let timer = 0;
+        const marker = '__TARE_SELECTED_TEXT__';
+
+        const normalize = (value) => (value || '').replace(/\\s+/g, ' ').trim();
+        const emit = () => {
+          const selection = window.getSelection && window.getSelection();
+          const text = normalize(selection ? selection.toString() : '');
+          if (!text || text.length < 2 || text === lastText) return;
+
+          lastText = text;
+          const clipped = text.length > 2000 ? text.slice(0, 2000) + '...' : text;
+          console.info(marker + JSON.stringify({
+            text: clipped,
+            url: location.href,
+            title: document.title
+          }));
+        };
+
+        const schedule = () => {
+          clearTimeout(timer);
+          timer = window.setTimeout(emit, 260);
+        };
+
+        document.addEventListener('selectionchange', schedule, true);
+        document.addEventListener('mouseup', schedule, true);
+        document.addEventListener('keyup', schedule, true);
+      })();
+    `
+
+    view.webContents.executeJavaScript(bridgeScript, true).catch(() => {
+      // Some pages may block injection during transient navigations.
+    })
+  }
+
   private updateTabData(tabId: string, updates: Partial<TabData>): void {
     const tab = this.tabs.get(tabId)
     if (!tab) return
@@ -542,7 +652,7 @@ export class TabManager {
     tab.view.setBounds({
       x: leftOffset,
       y: topOffset,
-      width: winWidth - leftOffset - this.RIGHT_GUTTER - this.sidebarWidth,
+      width: winWidth - leftOffset - this.RIGHT_GUTTER - this.sidebarWidth + this.SIDEBAR_OVERLAP,
       height: winHeight - topOffset - this.BOTTOM_GUTTER
     })
   }

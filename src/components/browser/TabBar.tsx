@@ -33,7 +33,12 @@ export function TabBar(): React.ReactElement {
 
   const handleCloseTab = (event: React.MouseEvent, tabId: string) => {
     event.stopPropagation()
-    window.browserAPI?.closeTab(tabId)
+    console.log('[TabBar] Closing tab:', tabId)
+    window.browserAPI?.closeTab(tabId).then(() => {
+      console.log('[TabBar] closeTab completed:', tabId)
+    }).catch((err: any) => {
+      console.error('[TabBar] closeTab error:', err)
+    })
   }
 
   const handleTabClick = (tabId: string) => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+﻿import React, { useState, useEffect, useMemo } from 'react'
 import {
   User, Shield, Key, Palette, Cpu, Zap, Monitor, Keyboard,
   Search as SearchIcon, Globe, Home, Languages, Download,
@@ -50,7 +50,7 @@ const DEFAULT_PREFS: Prefs = {
   theme: 'light',
   openaiApiKey: '',
   openaiBaseUrl: 'https://api.deepseek.com/v1',
-  model: 'deepseek-v4-pro',
+  model: 'deepseek-chat',
 }
 
 const SEARCH_ENGINES = [
@@ -61,12 +61,13 @@ const SEARCH_ENGINES = [
 ]
 
 const MODELS = [
-  { label: 'DeepSeek V4 Pro', value: 'deepseek-v4-pro' },
+  { label: 'DeepSeek Chat', value: 'deepseek-chat' },
+  { label: 'DeepSeek V4 Pro (推理)', value: 'deepseek-v4-pro' },
+  { label: 'DeepSeek Reasoner (推理)', value: 'deepseek-reasoner' },
   { label: 'GPT-4o', value: 'gpt-4o' },
   { label: 'GPT-4o Mini', value: 'gpt-4o-mini' },
   { label: 'GPT-4 Turbo', value: 'gpt-4-turbo' },
   { label: 'GPT-3.5 Turbo', value: 'gpt-3.5-turbo' },
-  { label: 'DeepSeek Reasoner', value: 'deepseek-reasoner' },
 ]
 
 export function SettingsPage(): React.ReactElement {
@@ -453,3 +454,4 @@ function SaveButton({ onClick, saved }: { onClick: () => void; saved: boolean })
     </button>
   )
 }
+

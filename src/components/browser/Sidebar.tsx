@@ -78,7 +78,7 @@ export function Sidebar({
   ]
 
   return (
-    <aside className="flex w-[172px] shrink-0 flex-col rounded-xl border border-slate-200/80 bg-white/80 px-4 pb-5 pt-7 shadow-[0_10px_30px_rgba(15,23,42,0.03)]">
+    <aside className="flex w-[172px] shrink-0 flex-col bg-white/80 px-4 pb-5 pt-7 shadow-[0_10px_30px_rgba(15,23,42,0.03)]">
       <nav className="space-y-1">
         {mainItems.map(({ icon: Icon, label, active, onClick }) => (
           <button

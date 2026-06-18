@@ -165,6 +165,7 @@ declare global {
       onTabRemoved: (callback: (tabId: string) => void) => () => void
       onActiveTabChanged: (callback: (tabId: string) => void) => () => void
       onHistoryUpdated: (callback: () => void) => () => void
+      onTextSelected: (callback: (payload: { text: string; url: string; title: string }) => void) => () => void
     }
     aiAPI: {
       sendMessage: (message: string, context?: any) => Promise<void>

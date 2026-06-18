@@ -32,16 +32,27 @@ import { SkillsPage } from './components/pages/SkillsPage'
 import type { ChatMessage } from './lib/types'
 import { useTabStore } from './stores/tabStore'
 
-const AI_PANEL_WIDTH = 482
+const DEFAULT_AI_PANEL_WIDTH = 476
+const MIN_AI_PANEL_WIDTH = 360
+const MAX_AI_PANEL_WIDTH = 640
+
+interface SelectedTextDraft {
+  id: number
+  text: string
+  url: string
+  title: string
+}
 
 function App(): React.ReactElement {
   const { tabs, activeTabId } = useTabStore()
   const activeTab = tabs.find(t => t.id === activeTabId)
   const [showAI, setShowAI] = useState(true)
+  const [aiPanelWidth, setAiPanelWidth] = useState(DEFAULT_AI_PANEL_WIDTH)
+  const [selectedTextDraft, setSelectedTextDraft] = useState<SelectedTextDraft | null>(null)
 
   useEffect(() => {
-    window.browserAPI?.setSidebarWidth(showAI ? AI_PANEL_WIDTH : 0)
-  }, [showAI])
+    window.browserAPI?.setSidebarWidth(showAI ? aiPanelWidth : 0)
+  }, [showAI, aiPanelWidth])
 
   useEffect(() => {
     const handleFocusUrlBar = () => {
@@ -57,6 +68,20 @@ function App(): React.ReactElement {
       unsub1?.()
       unsub2?.()
     }
+  }, [])
+
+  useEffect(() => {
+    const unsub = window.browserAPI?.onTextSelected((payload) => {
+      setShowAI(true)
+      setSelectedTextDraft({
+        id: Date.now(),
+        text: payload.text,
+        url: payload.url,
+        title: payload.title
+      })
+    })
+
+    return () => unsub?.()
   }, [])
 
   const handleToggleHistory = useCallback(() => {
@@ -81,6 +106,9 @@ function App(): React.ReactElement {
 
   const showNewTab = !activeTab || activeTab.isNewTab
 
+  // Debug logging
+  console.log('[App] activeTab:', activeTab?.id || 'null', 'isNewTab:', activeTab?.isNewTab, 'showNewTab:', showNewTab)
+
   return (
     <div className="h-screen overflow-hidden bg-[#f4f7fc] text-slate-900">
       <div className="h-full flex flex-col">
@@ -94,9 +122,9 @@ function App(): React.ReactElement {
           showAI={showAI}
         />
 
-        <div className="flex min-h-0 flex-1 overflow-hidden px-3.5 pb-2 pt-px">
-          <main className="relative min-w-0 flex-1 overflow-hidden rounded-xl border border-slate-200/80 bg-[#f8fbff]">
-            {showNewTab && <NewTabPage />}
+        <div className="flex min-h-0 flex-1 overflow-hidden">
+          <main className="relative min-w-0 flex-1 overflow-hidden">
+            {showNewTab && <NewTabPage key={activeTabId || 'new'} />}
             {activeTab?.url?.startsWith('browser://settings') && <SettingsPage />}
             {activeTab?.url?.startsWith('browser://downloads') && <DownloadsPage />}
             {activeTab?.url?.startsWith('browser://favourites') && <BookmarksPage />}
@@ -104,7 +132,15 @@ function App(): React.ReactElement {
             {activeTab?.url?.startsWith('browser://skills') && <SkillsPage />}
           </main>
 
-          <AISidebar isOpen={showAI} onClose={() => setShowAI(false)} />
+          <AISidebar
+            isOpen={showAI}
+            onClose={() => setShowAI(false)}
+            width={aiPanelWidth}
+            minWidth={MIN_AI_PANEL_WIDTH}
+            maxWidth={MAX_AI_PANEL_WIDTH}
+            onResize={setAiPanelWidth}
+            selectedTextDraft={selectedTextDraft}
+          />
         </div>
       </div>
     </div>
@@ -326,7 +362,12 @@ function NewTabPage(): React.ReactElement {
 
   const quickActions = [
     { icon: MessageCircle, label: '全局对话', colorClass: 'from-orange-500 to-rose-500' },
-    { icon: Zap, label: '快捷广场', colorClass: 'from-amber-500 to-orange-500' },
+    {
+      icon: Zap,
+      label: '技能市场',
+      colorClass: 'from-amber-500 to-orange-500',
+      onClick: () => window.browserAPI?.createTab('browser://skills/'),
+    },
     { icon: Clock, label: '定时任务', colorClass: 'from-blue-500 to-indigo-500' },
     { icon: BookOpen, label: '阅读模式', colorClass: 'from-emerald-500 to-teal-500' },
     { icon: MoreHorizontal, label: '更多', colorClass: 'from-slate-500 to-slate-600' },
@@ -346,7 +387,7 @@ function NewTabPage(): React.ReactElement {
       <div className="grid min-h-full place-items-center px-4 py-8">
         <div
           className="flex flex-col"
-          style={{ width: 'min(690px, 100%)', rowGap: 'clamp(14px, 2vh, 28px)' }}
+          style={{ width: 'min(720px, 100%)', rowGap: 'clamp(14px, 2vh, 28px)' }}
         >
         <section className="flex flex-col items-center">
           <AppIcon className="mb-3 h-16 w-16 rounded-2xl shadow-[0_12px_28px_rgba(15,23,42,0.12)]" />
@@ -488,10 +529,11 @@ function NewTabPage(): React.ReactElement {
         <section className="flex flex-col" style={{ rowGap: 'clamp(8px, 1.2vh, 14px)' }}>
           <h2 className="text-sm font-semibold text-slate-800">快捷操作</h2>
           <div className="flex" style={{ gap: 'clamp(10px, 1.2vw, 14px)' }}>
-            {quickActions.map(({ icon: Icon, label, colorClass }, index) => (
+            {quickActions.map(({ icon: Icon, label, colorClass, onClick }, index) => (
               <button
                 key={label}
                 type="button"
+                onClick={onClick}
                 className={`flex h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 shadow-[0_10px_22px_rgba(15,23,42,0.05)] transition-all hover:-translate-y-0.5 hover:border-slate-300 ${
                   index === quickActions.length - 1 ? 'w-[68px]' : 'w-[144px]'
                 }`}

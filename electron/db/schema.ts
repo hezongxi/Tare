@@ -113,7 +113,7 @@ export function createTables(db: Database): void {
     ['theme', 'dark'],
     ['openaiApiKey', 'sk-63bb71e289d04af4ac171d53568bed57'],
     ['openaiBaseUrl', 'https://api.deepseek.com/v1'],
-    ['model', 'deepseek-v4-pro']
+    ['model', 'deepseek-chat']
   ]
 
   for (const [key, value] of defaults) {

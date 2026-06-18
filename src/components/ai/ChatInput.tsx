@@ -4,11 +4,9 @@ import {
   Clock,
   Cpu,
   MessageCircle,
-  Puzzle,
   Send,
   Square,
   Trash2,
-  Wand2,
   Zap,
 } from 'lucide-react'
 import type { Skill } from '../../lib/types'
@@ -32,6 +30,12 @@ interface Props {
   onCommand?: (command: string, arg?: string) => void
   availableSkills?: Skill[]
   availableModels?: string[]
+  selectedTextDraft?: {
+    id: number
+    text: string
+    url: string
+    title: string
+  } | null
 }
 
 export function ChatInput({
@@ -42,6 +46,8 @@ export function ChatInput({
   onModeChange,
   onCommand,
   availableModels = [],
+  availableSkills = [],
+  selectedTextDraft,
 }: Props): React.ReactElement {
   const [input, setInput] = useState('')
   const [showCommands, setShowCommands] = useState(false)
@@ -50,14 +56,25 @@ export function ChatInput({
   const [subIndex, setSubIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const commandRef = useRef<HTMLDivElement>(null)
+  const lastSelectedTextDraftId = useRef<number | null>(null)
 
-  const baseCommands: Command[] = useMemo(() => [
-    { id: 'skills', label: '/skills', description: '浏览可用 Skills', icon: Puzzle },
-    { id: 'skill-creator', label: '/skill-creator', description: '创建新 Skill', icon: Wand2 },
-    { id: 'model', label: '/model', description: '切换 AI 模型', icon: Cpu, subItems: availableModels.map(m => ({ id: m, label: m })) },
-    { id: 'history', label: '/history', description: '查看对话历史', icon: Clock },
-    { id: 'clear', label: '/clear', description: '新建对话', icon: Trash2 },
-  ], [availableModels])
+  const baseCommands: Command[] = useMemo(() => {
+    const commands: Command[] = [
+      { id: 'model', label: '/model', description: '切换 AI 模型', icon: Cpu, subItems: availableModels.map(m => ({ id: m, label: m })) },
+      { id: 'history', label: '/history', description: '查看对话历史', icon: Clock },
+      { id: 'clear', label: '/clear', description: '新建对话', icon: Trash2 },
+    ]
+    if (availableSkills.length > 0) {
+      commands.unshift({
+        id: 'skill',
+        label: '/skill',
+        description: '执行已安装的技能',
+        icon: Zap,
+        subItems: availableSkills.map(s => ({ id: s.id, label: s.name }))
+      })
+    }
+    return commands
+  }, [availableModels, availableSkills])
 
   const query = input.startsWith('/') ? input.slice(1).toLowerCase() : ''
   const filteredCommands = query
@@ -80,6 +97,19 @@ export function ChatInput({
     textareaRef.current.style.height = 'auto'
     textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 112)}px`
   }
+
+  useEffect(() => {
+    if (!selectedTextDraft || lastSelectedTextDraftId.current === selectedTextDraft.id) return
+
+    lastSelectedTextDraftId.current = selectedTextDraft.id
+    const clippedText = selectedTextDraft.text.length > 1800
+      ? `${selectedTextDraft.text.slice(0, 1800)}...`
+      : selectedTextDraft.text
+
+    setInput(`请根据页面选中的文字回答：\n\n${clippedText}`)
+    setShowCommands(false)
+    requestAnimationFrame(resizeTextarea)
+  }, [selectedTextDraft])
 
   const handleChange = (value: string) => {
     setInput(value)

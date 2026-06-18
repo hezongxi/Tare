@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+﻿import React, { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Bot,
   Clock,
@@ -17,6 +17,16 @@ import { ChatMessages } from './ChatMessages'
 interface Props {
   isOpen: boolean
   onClose: () => void
+  width: number
+  minWidth: number
+  maxWidth: number
+  onResize: (width: number) => void
+  selectedTextDraft?: {
+    id: number
+    text: string
+    url: string
+    title: string
+  } | null
 }
 
 const PRESET_MODELS = [
@@ -28,13 +38,27 @@ const PRESET_MODELS = [
   'deepseek-reasoner',
 ]
 
-export function AISidebar({ isOpen, onClose }: Props): React.ReactElement | null {
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error || '未知错误')
+}
+
+export function AISidebar({ isOpen, onClose, width, minWidth, maxWidth, onResize, selectedTextDraft }: Props): React.ReactElement | null {
   const [isLoading, setIsLoading] = useState(false)
   const [streamingContent, setStreamingContent] = useState('')
-  const [mode, setMode] = useState<ChatMode>('qa')
+  const [mode, setMode] = useState<ChatMode>(
+    () => (localStorage.getItem('ai-sidebar-mode') === 'agent' ? 'agent' : 'qa')
+  )
+
+  // mode 变化时持久化
+  useEffect(() => {
+    localStorage.setItem('ai-sidebar-mode', mode)
+  }, [mode])
   const [showHistory, setShowHistory] = useState(false)
   const [currentModel, setCurrentModel] = useState('')
   const [skills, setSkills] = useState<Skill[]>([])
+  const resizeStateRef = useRef<{ startX: number; startWidth: number } | null>(null)
+  const timeoutRef = useRef<number | null>(null)
 
   const {
     sessions,
@@ -49,13 +73,18 @@ export function AISidebar({ isOpen, onClose }: Props): React.ReactElement | null
   const currentSession = sessions.find(s => s.id === currentSessionId)
   const messages = currentSession?.messages || []
 
+  const stopLoading = useCallback(() => {
+    setIsLoading(false)
+    setStreamingContent('')
+  }, [])
+
   useEffect(() => {
     loadFromStorage()
   }, [])
 
   useEffect(() => {
     window.dataAPI?.getPreferences().then(prefs => {
-      setCurrentModel(prefs?.model || 'deepseek-v3-pro')
+      setCurrentModel(prefs?.model || 'deepseek-chat')
     })
   }, [])
 
@@ -63,13 +92,46 @@ export function AISidebar({ isOpen, onClose }: Props): React.ReactElement | null
     window.skillAPI?.getSkills().then(list => setSkills(list || [])).catch(() => {})
   }, [])
 
+  // 监听新标签页创建事件，重置 AI 状态
   useEffect(() => {
-    if (sessions.length === 0 && isOpen) {
-      createSession(mode)
-    } else if (!currentSessionId && sessions.length > 0) {
-      setCurrentSession(sessions[0].id)
+    if (!window.browserAPI) return
+    const unsub = window.browserAPI.onTabCreated((tab) => {
+      // 如果是新标签页（没有 URL），重置 AI 对话状态
+      if (tab.isNewTab) {
+        console.log('[AISidebar] New tab created, resetting AI state')
+        setCurrentSession(null)
+        setStreamingContent('')
+        setIsLoading(false)
+      }
+    })
+    return () => unsub()
+  }, [setCurrentSession])
+
+  // 重置超时计时器（agent 模式每步重置）
+  const resetTimeout = useCallback(() => {
+    if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
+    const ms = mode === 'agent' ? 300000 : 120000
+    timeoutRef.current = window.setTimeout(() => {
+      window.aiAPI?.stopGeneration().catch(() => {})
+      addMessage({
+        role: 'assistant',
+        content: '请求超时了，已自动停止。你可以检查 API Key、模型名称或网络后再试。',
+        timestamp: new Date().toISOString(),
+      })
+      stopLoading()
+    }, ms)
+  }, [mode, addMessage, stopLoading])
+
+  useEffect(() => {
+    if (!isLoading) {
+      if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
+      return
     }
-  }, [isOpen, sessions.length, currentSessionId])
+    resetTimeout()
+    return () => {
+      if (timeoutRef.current) window.clearTimeout(timeoutRef.current)
+    }
+  }, [isLoading, resetTimeout])
 
   useEffect(() => {
     if (!window.aiAPI) return
@@ -82,12 +144,21 @@ export function AISidebar({ isOpen, onClose }: Props): React.ReactElement | null
     })
 
     const unsub2 = window.aiAPI.onDone((fullText: string) => {
-      const msg: ChatMessage = {
-        role: 'assistant',
-        content: fullText || currentContent,
-        timestamp: new Date().toISOString(),
+      // fullText === '' 表示清除当前流式内容（Agent 降级/重试时用）
+      if (fullText === '') {
+        setStreamingContent('')
+        currentContent = ''
+        return  // 不添加消息，不停止 loading
       }
-      addMessage(msg)
+      const content = fullText || currentContent
+      if (content.trim()) {
+        const msg: ChatMessage = {
+          role: 'assistant',
+          content,
+          timestamp: new Date().toISOString(),
+        }
+        addMessage(msg)
+      }
       setIsLoading(false)
       setStreamingContent('')
       currentContent = ''
@@ -105,6 +176,7 @@ export function AISidebar({ isOpen, onClose }: Props): React.ReactElement | null
     })
 
     const unsub4 = window.aiAPI.onAgentStep((step: any) => {
+      resetTimeout()
       let stepText = ''
       if (step.thought) stepText += `**思考:** ${step.thought}\n`
       if (step.action && step.action !== 'done') stepText += `**操作:** ${step.action}\n`
@@ -137,10 +209,12 @@ export function AISidebar({ isOpen, onClose }: Props): React.ReactElement | null
       unsub4()
       unsub5()
     }
-  }, [currentSessionId])
+  }, [])
 
   const handleSend = useCallback(async (message: string) => {
     if (!message.trim()) return
+
+    const history = messages.slice(-16).map(({ role, content }) => ({ role, content }))
 
     if (!currentSessionId) {
       createSession(mode)
@@ -151,35 +225,46 @@ export function AISidebar({ isOpen, onClose }: Props): React.ReactElement | null
       content: message,
       timestamp: new Date().toISOString(),
     })
+
     setIsLoading(true)
     setStreamingContent('')
 
     if (mode === 'agent') {
       try {
-        await window.aiAPI?.runAgent(message)
+        await window.aiAPI?.runAgent(message, history)
+        stopLoading()
       } catch (e) {
         addMessage({
           role: 'assistant',
           content: `Agent 执行失败: ${e}`,
           timestamp: new Date().toISOString(),
         })
-        setIsLoading(false)
+        stopLoading()
       }
       return
     }
 
-    let pageContext = ''
     try {
-      pageContext = await window.aiAPI?.onPageContentRequest() || ''
-    } catch {
-      pageContext = ''
+      let pageContext = ''
+      try {
+        pageContext = await window.aiAPI?.onPageContentRequest() || ''
+      } catch {
+        pageContext = ''
+      }
+      await window.aiAPI?.sendMessage(message, { pageContent: pageContext, history })
+    } catch (error) {
+      addMessage({
+        role: 'assistant',
+        content: `请求失败：${getErrorMessage(error)}`,
+        timestamp: new Date().toISOString(),
+      })
+      stopLoading()
     }
-    await window.aiAPI?.sendMessage(message, { pageContent: pageContext })
-  }, [mode, currentSessionId])
+  }, [mode, currentSessionId, messages, createSession, addMessage, stopLoading])
 
   const handleStop = async () => {
     await window.aiAPI?.stopGeneration()
-    setIsLoading(false)
+    stopLoading()
     if (streamingContent) {
       addMessage({
         role: 'assistant',
@@ -191,6 +276,8 @@ export function AISidebar({ isOpen, onClose }: Props): React.ReactElement | null
   }
 
   const handleNewChat = () => {
+    window.aiAPI?.stopGeneration().catch(() => {})
+    stopLoading()
     createSession(mode)
     setShowHistory(false)
   }
@@ -214,31 +301,32 @@ export function AISidebar({ isOpen, onClose }: Props): React.ReactElement | null
           })
         }
         break
-      case 'skills':
-        if (skills.length === 0) {
+      case 'skill':
+        if (arg) {
+          const skillName = skills.find(s => s.id === arg)?.name || arg
           addMessage({
             role: 'assistant',
-            content: '当前没有可用的 Skills。使用 `/skill-creator` 创建新技能。',
+            content: `正在执行技能「${skillName}」...`,
             timestamp: new Date().toISOString(),
           })
-        } else {
-          const skillList = skills.map(s => `- **${s.name}**: ${s.description}`).join('\n')
-          addMessage({
-            role: 'assistant',
-            content: `可用技能列表：\n${skillList}`,
-            timestamp: new Date().toISOString(),
-          })
+          try {
+            await window.skillAPI?.executeSkill(arg)
+            addMessage({
+              role: 'assistant',
+              content: `技能「${skillName}」执行完成。`,
+              timestamp: new Date().toISOString(),
+            })
+          } catch (e: any) {
+            addMessage({
+              role: 'assistant',
+              content: `技能执行失败: ${e?.message || e}`,
+              timestamp: new Date().toISOString(),
+            })
+          }
         }
         break
-      case 'skill-creator':
-        addMessage({
-          role: 'assistant',
-          content: '请在设置页面中创建新技能，或告诉我你想创建什么类型的技能，我可以帮你设计。',
-          timestamp: new Date().toISOString(),
-        })
-        break
     }
-  }, [skills, mode])
+  }, [mode, skills])
 
   if (!isOpen) return null
 
@@ -249,8 +337,43 @@ export function AISidebar({ isOpen, onClose }: Props): React.ReactElement | null
     { icon: MessageSquare, label: '解释当前网页中的专业术语', prompt: '请解释当前网页中的专业术语' },
   ]
 
+  const handleResizeStart = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    resizeStateRef.current = { startX: event.clientX, startWidth: width }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const state = resizeStateRef.current
+      if (!state) return
+      const deltaX = moveEvent.clientX - state.startX
+      const nextWidth = Math.min(maxWidth, Math.max(minWidth, state.startWidth - deltaX))
+      onResize(nextWidth)
+    }
+
+    const handleMouseUp = () => {
+      resizeStateRef.current = null
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+  }
+
   return (
-    <aside className="ml-[6px] flex w-[476px] shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_10px_30px_rgba(15,23,42,0.03)]">
+    <aside
+      className="relative flex shrink-0 flex-col overflow-hidden bg-white shadow-[0_10px_30px_rgba(15,23,42,0.03)]"
+      style={{ width, minWidth, maxWidth }}
+    >
+      <div
+        className="absolute left-0 top-0 z-50 h-full w-2 cursor-col-resize transition-colors hover:bg-blue-400/20"
+        onMouseDown={handleResizeStart}
+        onDoubleClick={() => onResize(476)}
+        title="拖动调整 AI 助手宽度"
+      />
       <header className="flex h-[54px] shrink-0 items-center justify-between border-b border-slate-200 px-5">
         <div className="flex min-w-0 items-center gap-3">
           <Bot className="h-5 w-5 shrink-0 text-orange-500" />
@@ -329,6 +452,10 @@ export function AISidebar({ isOpen, onClose }: Props): React.ReactElement | null
                   <span
                     onClick={(event) => {
                       event.stopPropagation()
+                      if (session.id === currentSessionId) {
+                        window.aiAPI?.stopGeneration().catch(() => {})
+                        stopLoading()
+                      }
                       deleteSession(session.id)
                     }}
                     className="flex h-5 w-5 items-center justify-center rounded-full text-slate-400 opacity-0 transition-all hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
@@ -377,7 +504,13 @@ export function AISidebar({ isOpen, onClose }: Props): React.ReactElement | null
         onCommand={handleCommand}
         availableSkills={skills}
         availableModels={PRESET_MODELS}
+        selectedTextDraft={selectedTextDraft}
       />
     </aside>
   )
 }
+
+
+
+
+
